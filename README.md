@@ -28,7 +28,7 @@ When deploying to production, make sure to replace these test credentials with y
 const frontegg = initialize({
   contextOptions: {
     baseUrl: "YOUR_BASE_URL",
-    clientId: "YOUR_CLIENT_ID",
+    appId: "YOUR_APP_ID",
   },
   hostedLoginBox: false,
 });
