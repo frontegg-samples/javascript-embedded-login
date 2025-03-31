@@ -29,6 +29,15 @@ If you don’t have a Frontegg account or prefer to use the sandbox credentials,
 
 If you're using your own credentials, follow the guidelines below.
 
+```javascript
+const frontegg = initialize({
+  contextOptions: {
+    baseUrl: "YOUR_BASE_URL",
+    appId: "YOUR_APP_ID",
+  },
+  hostedLoginBox: false,
+});
+```
 ### 1. Configure your Frontegg application (if using your own account) -
 
 1. Go to [Frontegg Portal](https://portal.frontegg.com/)

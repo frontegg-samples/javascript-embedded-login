@@ -6,7 +6,10 @@ import { DEFAULT_SANDBOX_CONTEXT, ELEMENT_IDS } from "./constants/config";
 const frontegg = initialize({
   contextOptions: {
     baseUrl: DEFAULT_SANDBOX_CONTEXT.baseUrl,
-    clientId: DEFAULT_SANDBOX_CONTEXT.clientId,
+    appId: DEFAULT_SANDBOX_CONTEXT.appId,
+  },
+  authOptions: {
+    keepSessionAlive: true
   },
   hostedLoginBox: false,
 });
@@ -68,7 +71,6 @@ frontegg.addOnLoadedListener(() => {
   const state = frontegg.store.getState().root.context;
   const isSandboxEnvironment = 
     state.baseUrl === "https://sandbox.frontegg.com" && 
-    state.clientId === "9af126b9-c35f-4e2d-a3f1-c261e22aaf4a" &&
     state.appId === "ad6012f5-905f-430e-ad0d-64e85f0ba6c7";
     
   if (isSandboxEnvironment) {
