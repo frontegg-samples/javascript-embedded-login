@@ -36,22 +36,13 @@ If you don’t have a Frontegg account or prefer to use the sandbox credentials,
 
 If you're using your own credentials, follow the guidelines below.
 
-```javascript
-const frontegg = initialize({
-  contextOptions: {
-    baseUrl: "YOUR_BASE_URL",
-    appId: "YOUR_APP_ID",
-  },
-  hostedLoginBox: false,
-});
-```
 ### 1. Configure your Frontegg application (if using your own account) -
 
 1. Go to [Frontegg Portal](https://portal.frontegg.com/)
 2. Get your application ID from [ENVIRONMENT] → Applications
 3. Get your Frontegg domain from the Frontegg Portal → [ENVIRONMENT] → Keys & domains
 4. This sample runs on `http://localhost:3000`. You may need to add `http://localhost:3000` under → [ENVIRONMENT] → Keys & domains → Allowed origins
-5. Update your own application's credentials under `/src/constants/config.js`
+5. Update your own application's credentials under `contextOptions`
 
 ### 2. Clone the repository - 
 
