@@ -12,6 +12,7 @@ const frontegg = initialize({
     keepSessionAlive: true
   },
   hostedLoginBox: false,
+  customLoader: true,
 });
 
 const elements = {
@@ -64,6 +65,11 @@ function removeAccountInfo() {
   }
 }
 
+function hideLoader() {
+  const loader = document.getElementById("custom-loader");
+  loader.style.display = "none";
+}
+
 elements.logoutBtn.addEventListener("click", () => window.location.href = "/account/logout");
 elements.loginBtn.addEventListener("click", () => window.location.href = "/account/login");
 
@@ -76,6 +82,7 @@ frontegg.addOnLoadedListener(() => {
   if (isSandboxEnvironment) {
     elements.signupBanner.style.display = "block";
   }
+  hideLoader();
 });
 
 frontegg.store.subscribe(() => updateUI(frontegg.store.getState()));

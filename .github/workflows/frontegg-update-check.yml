@@ -1,0 +1,170 @@
+name: Frontegg Package Auto-Update
+
+on:
+  schedule:
+    # Runs every week
+    - cron: "0 0 * * 0"
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  check-and-update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          ref: main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "20.10.0"
+          cache: "npm"
+
+      - name: Check for Frontegg package updates
+        id: check-updates
+        run: |
+          # Get current version from package.json
+          CURRENT_VERSION=$(node -p "require('./package.json').dependencies['@frontegg/js'].replace('^', '')")
+          echo "Current @frontegg/js version: $CURRENT_VERSION"
+          # Get latest version from npm registry
+          LATEST_VERSION=$(npm view @frontegg/js version)
+          echo "Latest @frontegg/js version: $LATEST_VERSION"
+          # Compare versions and set output
+          if [ "$CURRENT_VERSION" != "$LATEST_VERSION" ]; then
+            echo "update_available=true" >> $GITHUB_OUTPUT
+            echo "latest_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "No update available"
+            echo "update_available=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Set up Git
+        if: steps.check-updates.outputs.update_available == 'true'
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+      - name: Create update branch
+        if: steps.check-updates.outputs.update_available == 'true'
+        run: |
+          # Create and checkout new branch
+          BRANCH_NAME="frontegg-autoupdate"
+          git checkout -b $BRANCH_NAME
+          echo "Created branch: $BRANCH_NAME"
+      - name: Update package.json
+        if: steps.check-updates.outputs.update_available == 'true'
+        run: |
+          NEW_VERSION="${{ steps.check-updates.outputs.latest_version }}"
+          # Update package.json
+          npx json -I -f package.json -e "this.dependencies['@frontegg/js']='^${NEW_VERSION}'"
+          echo "Updated @frontegg/js to version ^${NEW_VERSION} in package.json"
+      - name: Update package-lock.json
+        if: steps.check-updates.outputs.update_available == 'true'
+        run: |
+          # Run npm install to update package-lock.json
+          npm install
+          echo "Updated package-lock.json"
+      - name: Build project
+        id: build
+        if: steps.check-updates.outputs.update_available == 'true'
+        run: |
+          # Run build command to ensure everything works with the new version
+          if npm run build; then
+            echo "build_failed=false" >> $GITHUB_OUTPUT
+            echo "Build successful with updated package"
+          else
+            echo "build_failed=true" >> $GITHUB_OUTPUT
+            echo "Build failed with the updated package."
+            exit 1
+          fi
+      - name: Commit and push changes
+        if: steps.check-updates.outputs.update_available == 'true' && success()
+        run: |
+          NEW_VERSION="${{ steps.check-updates.outputs.latest_version }}"
+          git add package.json package-lock.json
+          git commit -m "chore: update @frontegg/js to version ${NEW_VERSION}"
+          git push --set-upstream origin frontegg-autoupdate -f
+          echo "Pushed changes to branch: frontegg-autoupdate"
+      - name: Create Pull Request
+        if: steps.check-updates.outputs.update_available == 'true' && success()
+        id: create-pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NEW_VERSION="${{ steps.check-updates.outputs.latest_version }}"
+          PR_TITLE="Update @frontegg/js to version ${NEW_VERSION}"
+          PR_BODY="This is an automated PR created by the Frontegg Auto-Update workflow.
+          ## Changes:
+          - Updated @frontegg/js from version $(node -p "require('./package.json').dependencies['@frontegg/js'].replace('^', '')") to version ${NEW_VERSION}
+          ## Changelog:
+          Check the [Frontegg changelog](https://github.com/frontegg/frontegg-js/releases) for details on what's included in this update."
+          # Check if PR already exists
+          PR_EXISTS=$(gh pr list --head frontegg-autoupdate --base main --json number | jq 'length')
+          if [ "$PR_EXISTS" -eq "0" ]; then
+            # Create new PR
+            PR_URL=$(gh pr create --title "$PR_TITLE" --body "$PR_BODY" --base main --head frontegg-autoupdate)
+            echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
+            echo "Created new PR: $PR_TITLE"
+          else
+            echo "PR already exists, updating existing PR"
+            PR_NUMBER=$(gh pr list --head frontegg-autoupdate --base main --json number | jq '.[0].number')
+            gh pr edit $PR_NUMBER --title "$PR_TITLE" --body "$PR_BODY"
+            PR_URL=$(gh pr view $PR_NUMBER --json url | jq -r '.url')
+            echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
+          fi
+      - name: Enable PR Auto-merge
+        id: automerge
+        if: steps.check-updates.outputs.update_available == 'true' && success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_URL="${{ steps.create-pr.outputs.pr_url }}"
+          PR_NUMBER=$(echo $PR_URL | awk -F/ '{print $NF}')
+          
+          echo "Attempting to enable auto-merge for PR #$PR_NUMBER"
+          if gh pr merge $PR_NUMBER --auto --squash 2>/dev/null; then
+            echo "automerge_failed=false" >> $GITHUB_OUTPUT
+            echo "Successfully enabled auto-merge for PR #$PR_NUMBER"
+          else
+            echo "automerge_failed=true" >> $GITHUB_OUTPUT
+            echo "Could not enable auto-merge for PR #$PR_NUMBER (this may be because protected branch rules are not configured)"
+            echo "Continuing workflow - PR will need manual approval"
+          fi
+      - name: Notify Slack on auto-merge failure
+        if: steps.check-updates.outputs.update_available == 'true' && success() && steps.automerge.outputs.automerge_failed == 'true'
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_CHANNEL: frontegg-alpha-versions
+          SLACK_COLOR: warning
+          SLACK_ICON: https://avatars.githubusercontent.com/u/67857107?s=40&v=4
+          SLACK_MESSAGE: "Vanilla JavaScript embedded login sample: ⚠️ PR for @frontegg/js version ${{ steps.check-updates.outputs.latest_version }} was created but auto-merge could NOT be enabled. Manual approval needed! \nRepository: ${{ github.server_url }}/${{ github.repository }}\nPR: ${{ steps.create-pr.outputs.pr_url }}"
+          SLACK_TITLE: "Auto-merge Not Enabled"
+          SLACK_USERNAME: ${{ github.actor }}
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          MSG_MINIMAL: true
+
+      - name: Notify Slack on successful update
+        if: steps.check-updates.outputs.update_available == 'true' && success() && steps.automerge.outputs.automerge_failed != 'true'
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_CHANNEL: frontegg-alpha-versions
+          SLACK_COLOR: good
+          SLACK_ICON: https://avatars.githubusercontent.com/u/67857107?s=40&v=4
+          SLACK_MESSAGE: "Vanilla JavaScript embedded login sample: ${{ github.actor }} pushed updated version of @frontegg/js version ${{ steps.check-updates.outputs.latest_version }}! \nRepository: ${{ github.server_url }}/${{ github.repository }}"
+          SLACK_TITLE: "Frontegg Package Auto-Update"
+          SLACK_USERNAME: ${{ github.actor }}
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          MSG_MINIMAL: true
+
+      - name: Notify Slack on build failure
+        if: failure() && steps.check-updates.outputs.update_available == 'true' && steps.build.outcome == 'failure'
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_CHANNEL: frontegg-alpha-versions
+          SLACK_COLOR: danger
+          SLACK_ICON: https://avatars.githubusercontent.com/u/67857107?s=40&v=4
+          SLACK_MESSAGE: "Vanilla JavaScript embedded login sample: ⚠️ Build failed when updating to @frontegg/js version ${{ steps.check-updates.outputs.latest_version }}! \nRepository: ${{ github.server_url }}/${{ github.repository }}"
+          SLACK_TITLE: "Frontegg Package Update Failed"
+          SLACK_USERNAME: ${{ github.actor }}
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          MSG_MINIMAL: true
