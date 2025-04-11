@@ -473,6 +473,37 @@ body {
   fill: var(--classic-primary);
 }
 
+.spinner-wrapper {
+  background:#2020207e;
+  width: 100%;
+  height: 100%;
+  position: fixed;
+  top: 0;
+  left: 0;
+}
+
+.spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--classic-grey-200);
+  border-radius: 50%;
+  border-top-color: var(--classic-primary);
+  animation: spinner 1s linear infinite;
+}
+
+@keyframes spinner {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
 
 @media (min-width: 1280px) {
   .container {
